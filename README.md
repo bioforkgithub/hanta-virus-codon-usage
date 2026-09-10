@@ -86,18 +86,6 @@ and synonymous-codon randomisation. Viral genes are benchmarked against two
 independently published human housekeeping-gene panels — one from lung, one from
 kidney — because Andes virus affects both organs.
 
-### Provenance
-
-The pipeline is a **methodological replication** of
-
-> Victor MP, Das R, Ghosh TC (2023) *Revisiting SARS-CoV-2: evolution,
-> polymorphism and compatibility with human tRNA pool in a lineage over a month.*
-> Indian Journal of Applied Microbiology 25:11–36
-
-applied to hantaviruses instead of SARS-CoV-2, and extended with a genus-wide
-dN/dS comparison and a second (kidney) tissue benchmark that have no counterpart
-in the original.
-
 ---
 
 ## 3. Repository layout
@@ -463,7 +451,7 @@ Please also cite the methods it implements:
 - Zuker M, Stiegler P (1981) *Nucleic Acids Res* **9**:133–148 — folding algorithm
 - Chan PP, Lowe TM (2016) *Nucleic Acids Res* **44**:D184–D189 — GtRNAdb
 - Cock PJA et al. (2009) *Bioinformatics* **25**:1422–1423 — Biopython
-- Victor MP, Das R, Ghosh TC (2023) *Indian J Appl Microbiol* **25**:11–36 — the framework replicated here
+- Victor MP, Das R, Ghosh TC (2023) *Indian J Appl Microbiol* **25**:11–36 — co-AI (tRNA co-adaptation index)
 
 ---
 
