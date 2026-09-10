@@ -129,7 +129,8 @@ in the original.
 │       ├── 01_translate_align.py
 │       ├── 02_pairwise_dnds.py
 │       ├── 03_genus_stats_figures.R
-│       └── 04_phylogeny.py
+│       ├── 04_phylogeny.py
+│       └── 05_permutation_test.py
 │
 └── helpers/                      exploratory scripts from earlier stages
     ├── download_sequences.py
@@ -323,15 +324,28 @@ environmental–environmental, or cross.
 
 **`pipeline/03_genus_stats_figures.R`** — Kruskal–Wallis and post-hoc Wilcoxon
 tests (Benjamini–Hochberg corrected) comparing dN/dS across the three pair
-categories, plus per-species CAI and ENC by clinical category. **Note the caveat
-written into the script:** the 231 pairwise values are not independent — each
-species appears in 21 pairs — so these are exploratory statistics, not a
-phylogenetically corrected test.
+categories, plus per-species CAI and ENC by clinical category. **These tests
+assume the 231 pairwise values are independent, and they are not** — each
+species appears in 21 pairs — so the p-values they produce are
+anti-conservative. They are kept for comparability with earlier work; the
+values reported in the paper come from `05_permutation_test.py` below.
 
 **`pipeline/04_phylogeny.py`** — Neighbour-joining tree of the 22 species from
 the protein alignment, using uncorrected p-distance, midpoint-rooted. Presented
 to illustrate clustering topology only; it is not a molecular-clock phylogeny
 and no reported result depends on its branch lengths.
+
+**`pipeline/05_permutation_test.py`** — Exact permutation test, and the source of
+every dN/dS p-value reported in the paper. Because each of the 22 species
+contributes to 21 of the 231 pairs, the pairs cannot be permuted; the species
+label can. The script enumerates all C(22,10) = 646,646 ways of assigning the
+pathogenic label to 10 of the 22 species, recomputes the group means and the
+Kruskal–Wallis statistic under each, and takes the p-value as the proportion of
+assignments at least as extreme as the observed one. The null distribution is
+enumerated completely rather than sampled, so the p-values are exact. Two
+properties keep it to a few seconds: the pooled ranks are invariant across
+relabellings, and every relabelling preserves the group sizes (45 / 120 / 66),
+so the tie correction cancels. Writes `results/permutation_test.tsv`.
 
 ### `helpers/` — earlier exploratory scripts
 
