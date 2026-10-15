@@ -21,7 +21,13 @@ ACCESSIONS = [
     ("NM_000291.4", "PGK1"),
     ("NM_012423.4", "RPL13A"),
     ("NM_053275.3", "RPLP0"),
-    ("XM_005254549.3", "B2M"),
+    # B2M: harmonised with the kidney panel at revision. The submitted version
+    # used XM_005254549.3, a PREDICTED model RefSeq of 369 bp, while the kidney
+    # panel used the curated NM_004048.4 (360 bp) - the same gene entered the
+    # two panels as two different records, and the lung choice also contradicted
+    # this project's own accession resolution table. The two panels are compared
+    # against each other, so both now use the curated record.
+    ("NM_004048.4", "B2M"),
     ("NM_004168.4", "SDHA"),
     ("NM_000181.4", "GUSB"),
     ("NM_000190.4", "HMBS"),

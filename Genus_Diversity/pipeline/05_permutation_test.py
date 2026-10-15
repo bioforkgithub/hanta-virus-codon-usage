@@ -1,12 +1,12 @@
 """
-Exact permutation test for the genus-wide dN/dS comparison.
+Exact permutation test for the across-species pn/ps comparison.
 
 WHY THIS EXISTS
 ---------------
-03_genus_stats_figures.R compares the 231 pairwise dN/dS values across three
+03_genus_stats_figures.R compares the 231 pairwise pn/ps values across three
 categories with a Kruskal-Wallis test and post-hoc Wilcoxon tests. Those tests
 assume the observations are independent. They are not. Each of the 22 species
-contributes to 21 of the 231 pairs, so a single species with unusual dN/dS
+contributes to 21 of the 231 pairs, so a single species with unusual pn/ps
 moves 21 values at once. The resulting p-values are anti-conservative by
 roughly ten orders of magnitude.
 
@@ -31,7 +31,7 @@ So the whole null distribution is a few numpy reductions and runs in seconds.
 
 INPUTS
 ------
-    results/pairwise_dnds_matrix.tsv   (from 02_pairwise_dnds.py)
+    results/pairwise_pnps_matrix.tsv   (from 02_pairwise_dnds.py)
     genus_diversity_manifest.tsv       (species -> category)
 
 OUTPUT
@@ -57,14 +57,14 @@ CHUNK = 20_000          # relabellings evaluated per numpy pass
 
 def load():
     rows = list(csv.DictReader(
-        open(RESULTS / "pairwise_dnds_matrix.tsv"), delimiter="\t"))
+        open(RESULTS / "pairwise_pnps_matrix.tsv"), delimiter="\t"))
     cat = {r["abbrev"]: r["category"] for r in csv.DictReader(
         open(BASE / "genus_diversity_manifest.tsv"), delimiter="\t")}
     species = sorted(cat)
     idx = {s: i for i, s in enumerate(species)}
     A = np.array([idx[r["species_A"]] for r in rows])
     B = np.array([idx[r["species_B"]] for r in rows])
-    V = np.array([float(r["dNdS"]) for r in rows])
+    V = np.array([float(r["pnps"]) for r in rows])
     labels = np.array([cat[s] == "pathogenic" for s in species])
     assert len(V) == comb(len(species), 2), "matrix is not a complete set of pairs"
     return species, A, B, V, labels
@@ -101,7 +101,7 @@ def main():
 
     print("%d species (%d pathogenic, %d environmental), %d pairs"
           % (n, k, n - k, len(V)))
-    print("observed mean dN/dS   pathogenic-pathogenic %.4f   cross %.4f   "
+    print("observed mean pn/ps    pathogenic-pathogenic %.4f   cross %.4f   "
           "environmental-environmental %.4f" % (pp, cx, ee))
 
     gobs = obs[A].astype(int) + obs[B]

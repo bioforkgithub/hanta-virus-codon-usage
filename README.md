@@ -1,9 +1,14 @@
-# Codon usage, host-tRNA compatibility and purifying selection in Andes virus and the genus *Orthohantavirus*
+# Genomic stasis during a person-to-person Andes virus outbreak, and nucleoprotein and glycoprotein conservation across the hantaviruses
 
 Analysis code for a study of codon usage bias, human tRNA compatibility, RNA
 folding stability and selective constraint in hantaviruses, examined at two very
 different timescales: within a single contact-traced Andes virus outbreak, and
-across 22 named *Orthohantavirus* species.
+across 22 named hantavirus species.
+
+> **State of this repository.** Follow-up analyses are in `Revision_2026/`,
+> and the three corrections made to the original pipeline are listed in
+> [section 9](#9-corrections-to-this-code). Read that section before reusing
+> any number produced by an earlier version of this code.
 
 This repository contains **code only**. No sequence data, results tables,
 figures or manuscript files are included — every input is downloaded from public
@@ -30,7 +35,12 @@ That assistance covered:
 - reviewing, correcting and copy-editing the accompanying manuscript, verifying
   every reference DOI against Crossref, and auditing the code against the
   manuscript's own Methods section — a check that found and corrected several
-  discrepancies between what the manuscript claimed and what the code does.
+  discrepancies between what the manuscript claimed and what the code does;
+- drafting the scripts in `Revision_2026/`, and finding the four defects
+  listed in
+  [section 9](#9-corrections-to-this-code). Two of those four were caught
+  by arithmetic that did not reconcile rather than by inspection, which is the
+  kind of check worth repeating on anything here.
 
 **What AI did not do.** No sequence data was generated, altered or imputed by
 AI. No result, statistic, table or figure value in this repository or the
@@ -67,17 +77,31 @@ The study asks one question at two timescales:
 > gene — and does that constraint track a lineage's ability to cause human
 > disease?**
 
-**Short timescale — about eleven weeks.** The 2018–2019 Épuyén outbreak in
+**Short timescale — about ten weeks.** The 2018–2019 Épuyén outbreak in
 Chubut Province, Argentina, is the clearest documented instance of
 person-to-person hantavirus transmission. Twenty-eight patients have genome
 sequences in GenBank — all three segments for all but one, whose L segment was
 never deposited. Comparing every successor genome with the index case gives
 within-outbreak polymorphism (pn/ps) — selection caught in the act.
 
-**Long timescale — tens of millions of years.** Twenty-two named
-*Orthohantavirus* species, split into ten confirmed human pathogens and twelve
-found only in wildlife, give 231 pairwise nucleoprotein dN/dS comparisons —
-selection long since completed.
+**Long timescale — tens of millions of years.** Twenty-two named hantavirus
+species, split into ten confirmed human pathogens and twelve found only in
+wildlife, give 231 pairwise nucleoprotein comparisons — selection long since
+completed. Eighteen of the 22 are in genus *Orthohantavirus*; two are
+*Thottimvirus* and two *Mobatvirus* under current ICTV taxonomy, although all
+22 were classified in *Orthohantavirus* when the records used here were
+deposited. Nothing in the analysis turns on this: the same sequences are used,
+and species are grouped by disease association, not by genus.
+
+The across-species comparison covers two segments: the nucleoprotein (S) and
+the glycoprotein precursor (M). The polymerase (L) is not
+included, because complete annotated L coding sequences are not available for
+all 22 species.
+
+**A note on labelling.** The pairwise divergence statistic computed by
+`Genus_Diversity/pipeline/02_pairwise_dnds.py` is pn/ps — uncorrected
+proportions — and not dN/dS. Corrected estimates come from PAML, in
+`Revision_2026/`. See [section 9](#9-corrections-to-this-code).
 
 Supporting measures computed throughout: **CAI** (codon adaptation index),
 **ENC** (effective number of codons), **co-AI** (correlation between codon usage
@@ -110,6 +134,9 @@ kidney — because Andes virus affects both organs.
 │       ├── 07_stats_figures.R
 │       ├── 08_kidney_hkg_metrics.py
 │       └── 09_tissue_comparison_stats_figures.R
+│
+├── Revision_2026/                follow-up analysis code
+│   └── README.md                 what each subdirectory does
 │
 ├── Genus_Diversity/              long-timescale analysis (22 species)
 │   ├── download_genus_diversity.py
@@ -160,11 +187,17 @@ Two environments were used. The exact versions the published analysis ran on:
 | tidyr | 1.3.2 |
 | stringr | 1.6.0 |
 
-**External binary**
+**External binaries**
 
 | tool | version | used for |
 |---|---|---|
 | MAFFT | 7.526 | protein alignment of the 22 species |
+| IQ-TREE | 3.1.1 | maximum-likelihood trees (`Revision_2026/`) |
+| PAML | 4.10.10 | `yn00` and `codeml` (`Revision_2026/`) |
+
+IQ-TREE and PAML are needed only for `Revision_2026/`; the two original
+pipelines do not use them. Some scripts in `Revision_2026/` additionally use
+`statsmodels` for the covariance analyses.
 
 Quick setup with conda/mamba:
 
@@ -218,7 +251,9 @@ index case; the rest are successors.
 
 **`download_lung_hkg.py`** — Fetches the twelve human lung housekeeping genes
 used as the pulmonary benchmark panel, by exact RefSeq accession, and extracts
-each coding sequence.
+each coding sequence. B2M was changed from the predicted model
+record `XM_005254549.3` to the curated `NM_004048.4`, which is what the kidney
+panel already used.
 
 **`download_kidney_hkg.py`** — Fetches the eighteen-gene human kidney reference
 panel of Strauss et al. (2021, PLoS ONE 16:e0259373) by resolving each gene
@@ -240,7 +275,11 @@ concatenated — plus `orf_summary.tsv` with length and stop-codon sanity checks
 
 **<a name="shared_utilspy"></a>`pipeline/shared_utils.py`** — Shared library:
 FASTA I/O, the codon table, amino-acid polarity classes, CAI, ENC, windowed mFE
-and the synonymous-codon randomiser. CAI and ENC are implemented directly in
+and the synonymous-codon randomiser. Two of the three corrections are
+in this file: `load_cai_weights` now excludes the single-codon Met and Trp
+families by default, and `compute_enc` now makes its treatment of an
+unestimable degeneracy class explicit. Both are documented in their
+docstrings and in [section 9](#9-corrections-to-this-code). CAI and ENC are implemented directly in
 Python rather than calling EMBOSS, because on the original host `cai` was a
 symlink to codonW (a different, incompatible program) and `chips` was a broken
 wrapper. This is the most important file to read if you want to check the
@@ -288,11 +327,11 @@ tissues on identical footing.
 Andes virus index-case ORFs versus lung panel versus kidney panel, for CAI and
 mFE.
 
-### `Genus_Diversity/` — the genus-wide analysis
+### `Genus_Diversity/` — the across-species analysis
 
 **`download_genus_diversity.py`** — Downloads one representative RefSeq
-S-segment (nucleoprotein) coding sequence for each of 22 curated
-*Orthohantavirus* species, tagged pathogenic or environmental. Accessions were
+S-segment (nucleoprotein) coding sequence for each of 22 curated hantavirus
+species, tagged pathogenic or environmental. Accessions were
 resolved live against RefSeq and manually reviewed for correct segment and
 species assignment.
 
@@ -304,15 +343,19 @@ implemented here directly rather than via an external tool such as PAL2NAL.
 Aligning on protein and projecting back is more reliable than aligning
 nucleotides directly at this depth of divergence.
 
-**`pipeline/02_pairwise_dnds.py`** — Pairwise dN/dS across all
+**`pipeline/02_pairwise_dnds.py`** — Pairwise **pn/ps** across all
 C(22,2) = 231 species pairs, reusing the site- and difference-counting functions
 validated on the outbreak data. Columns gapped in either sequence of a pair are
 excluded. Each pair is classified pathogenic–pathogenic,
-environmental–environmental, or cross.
+environmental–environmental, or cross. Also writes per-species CAI, ENC and
+GC3. The ratio is uncorrected and is named `pnps` in the
+output; it was called `dNdS` in v1.1. Corrected estimators are in
+`Revision_2026/R2.2_phylo_dnds_2026-10-12/`.
 
 **`pipeline/03_genus_stats_figures.R`** — Kruskal–Wallis and post-hoc Wilcoxon
-tests (Benjamini–Hochberg corrected) comparing dN/dS across the three pair
-categories, plus per-species CAI and ENC by clinical category. **These tests
+tests (Benjamini–Hochberg corrected) comparing pn/ps across the three pair
+categories, plus per-species CAI and ENC by clinical category and the
+analysis of covariance that adjusts the CAI comparison for GC3. **These tests
 assume the 231 pairwise values are independent, and they are not** — each
 species appears in 21 pairs — so the p-values they produce are
 anti-conservative. They are kept for comparability with earlier work; the
@@ -321,10 +364,14 @@ values reported in the paper come from `05_permutation_test.py` below.
 **`pipeline/04_phylogeny.py`** — Neighbour-joining tree of the 22 species from
 the protein alignment, using uncorrected p-distance, midpoint-rooted. Presented
 to illustrate clustering topology only; it is not a molecular-clock phylogeny
-and no reported result depends on its branch lengths.
+and no reported result depends on its branch lengths. **Superseded**: the
+reported tree is a maximum-likelihood tree
+from IQ-TREE with model selection and branch support, in
+`Revision_2026/R2.2_phylo_dnds_2026-10-12/`. This script is kept because it is
+what the earlier version used.
 
 **`pipeline/05_permutation_test.py`** — Exact permutation test, and the source of
-every dN/dS p-value reported in the paper. Because each of the 22 species
+every pn/ps p-value reported in the paper. Because each of the 22 species
 contributes to 21 of the 231 pairs, the pairs cannot be permuted; the species
 label can. The script enumerates all C(22,10) = 646,646 ways of assigning the
 pathogenic label to 10 of the 22 species, recomputes the group means and the
@@ -379,7 +426,7 @@ Rscript pipeline/09_tissue_comparison_stats_figures.R
 `run_all.sh` is idempotent — safe to re-run from scratch. Individual steps can
 also be run on their own, in numerical order, as long as earlier outputs exist.
 
-### The genus-wide analysis
+### The across-species analysis
 
 ```bash
 cd Genus_Diversity
@@ -392,6 +439,12 @@ python  pipeline/04_phylogeny.py
 ```
 
 There is no runner script here; run the four steps in order.
+
+### The follow-up analyses
+
+`Revision_2026/` has no runner, and its scripts cannot be run as published
+without editing paths and supplying the data deposit. Read
+[`Revision_2026/README.md`](Revision_2026/README.md) first.
 
 ### Outputs
 
@@ -417,7 +470,8 @@ scripts:
 | Lung housekeeping panel (12 genes) | RefSeq, by accession |
 | Kidney housekeeping panel (18 genes) | RefSeq, via Strauss et al. 2021 gene list |
 | Human tRNA gene copy numbers | GtRNAdb 2.0, hg38 high-confidence set |
-| 22 *Orthohantavirus* nucleoprotein CDS | RefSeq / annotated GenBank |
+| 22 hantavirus nucleoprotein (S) CDS | RefSeq / annotated GenBank |
+| 22 hantavirus glycoprotein precursor (M) CDS | RefSeq / annotated GenBank |
 
 The GtRNAdb hg38 set must be downloaded manually from
 <https://gtrnadb.ucsc.edu/> into `Epuyen_outbreak/hg38-tRNAs/` before running
@@ -427,16 +481,76 @@ The GtRNAdb hg38 set must be downloaded manually from
 
 ## 8. Validating the implementations
 
-CAI, ENC and Nei–Gojobori dN/dS are implemented in this repository rather than
+CAI, ENC and Nei–Gojobori counting are implemented in this repository rather than
 taken from an established package, for the reason given under
 [`shared_utils.py`](#shared_utilspy). If you intend to rely on these numbers,
 cross-check a subset against independent tools — EMBOSS `cai` and `chips` (a
-genuine installation), codonW, or MEGA for dN/dS. Discrepancies are worth
+genuine installation), codonW, or MEGA. Discrepancies are worth
 reporting as issues.
 
 ---
 
-## 9. Citation
+## 9. Corrections to this code
+
+Four things this code got wrong, or labelled wrongly, are corrected in the
+branches of this repository from v1.2 onward. They are recorded here rather
+than only in the commit history, because anyone holding a result produced by
+v1.1 or earlier needs to know which of them affects it.
+
+**1. CAI admitted Met and Trp at w = 1.** Those two amino acids have a single
+codon each, so they carry no information about synonymous choice, and the
+standard definition of Sharp and Li (1987) excludes them. Including them at a
+weight of exactly one can only raise a geometric mean of terms that are all at
+most one, so every CAI value this repository produced before v1.2 was slightly
+too high. The correction is not a uniform offset — it depends on a sequence's
+Met and Trp content — so it does not cancel in a comparison: the human
+reference panels fall by 0.0070–0.0081, the Andes virus coding sequences by
+0.0102–0.0113, and the 22 nucleoprotein sequences by 0.0086–0.0175.
+`load_cai_weights(include_met_trp=True)` reproduces the old behaviour, and the
+correction was validated by reproducing the previously published values exactly
+in that mode before anything was changed. In `shared_utils.py`.
+
+**2. ENC treated a computed F of zero as missing data.** A family whose codons
+are used perfectly evenly gives F = 0 exactly, which makes 1/F a division by
+zero. A falsy test cannot tell that case from a class with no usable data, and
+the old code substituted F = 1 for both — that is, it imposed *maximal* bias on
+a *maximally even* family, pushing Nc in the wrong direction. The case is real,
+not hypothetical: it occurs in the Ile family of the lung panel gene NDUFA3.
+`compute_enc` now makes the convention an explicit argument. The default,
+`undefined="as_published"`, keeps the old substitution so that this repository
+still reproduces the published ENC tables; `undefined="wright"` applies
+Wright's own suggestion, F3 = (F2 + F4)/2, and gives 39.545 for NDUFA3 against
+38.842 as published. In `shared_utils.py`.
+
+**3. The lung and kidney panels used two different records for the same gene.**
+B2M entered the lung panel as `XM_005254549.3`, a predicted model transcript of
+369 bp, and the kidney panel as the curated `NM_004048.4`, 360 bp. The two
+panels are compared against each other, and the lung choice also contradicted
+this project's own accession resolution table. Both now use the curated record.
+This moves ENC and folding energy as well as CAI, because it is a different
+sequence — not only a different way of scoring the same one. In
+`download_lung_hkg.py`.
+
+**4. Uncorrected pn/ps was labelled dN/dS.** `02_pairwise_dnds.py` applies no
+correction for multiple hits, for transition/transversion bias or for codon
+usage, so what it computes is pn/ps. The column is now `pnps` and the output
+file `pairwise_pnps_matrix.tsv`; they were `dNdS` and `pairwise_dnds_matrix.tsv`
+in v1.1. This matters in substance and not only in name, because ps reaches or
+exceeds 0.75 — the point at which the Jukes–Cantor correction becomes
+undefined — in 204 of the 231 pairs. Corrected estimates are in
+`Revision_2026/`.
+
+One further change is an addition rather than a correction: the CAI comparison
+between groups is now adjusted for GC3 by analysis of covariance, reporting the
+group term of `CAI ~ group + GC3`, in place of a two-step procedure that
+regressed CAI on GC3 and then tested the residuals. The two-step version does
+not carry the uncertainty of the first-stage fit into the second-stage test.
+Both are computed in `03_genus_stats_figures.R`, the two-step one for
+comparability only. The conclusion is the same either way.
+
+---
+
+## 10. Citation
 
 If you use this code, please cite the manuscript (details to be added on
 acceptance) and this repository.
@@ -445,17 +559,20 @@ Please also cite the methods it implements:
 
 - Sharp PM, Li WH (1987) *Nucleic Acids Res* **15**:1281–1295 — CAI
 - Wright F (1990) *Gene* **87**:23–29 — ENC
-- Nei M, Gojobori T (1986) *Mol Biol Evol* **3**:418–426 — dN/dS counting
+- Nei M, Gojobori T (1986) *Mol Biol Evol* **3**:418–426 — synonymous/non-synonymous counting
 - dos Reis M, Savva R, Wernisch L (2004) *Nucleic Acids Res* **32**:5036–5044 — near-cognate decoding
 - Katoh K, Standley DM (2013) *Mol Biol Evol* **30**:772–780 — MAFFT
 - Zuker M, Stiegler P (1981) *Nucleic Acids Res* **9**:133–148 — folding algorithm
 - Chan PP, Lowe TM (2016) *Nucleic Acids Res* **44**:D184–D189 — GtRNAdb
 - Cock PJA et al. (2009) *Bioinformatics* **25**:1422–1423 — Biopython
+- Yang Z (2007) *Mol Biol Evol* **24**:1586–1591 — PAML
+- Yang Z, Nielsen R (2000) *Mol Biol Evol* **17**:32–43 — the YN00 pairwise estimator
+- Wong TKF et al. (2025) — IQ-TREE 3
 - Victor MP, Das R, Ghosh TC (2023) *Indian J Appl Microbiol* **25**:11–36 — co-AI (tRNA co-adaptation index)
 
 ---
 
-## 10. License
+## 11. License
 
 Released under the **MIT License** — see [`LICENSE`](LICENSE).
 

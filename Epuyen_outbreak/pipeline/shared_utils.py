@@ -39,6 +39,12 @@ for c, aa in CODON_TABLE.items():
     if aa != "*":
         AA_TO_CODONS.setdefault(aa, []).append(c)
 
+# The two single-codon amino-acid families, Met (ATG) and Trp (TGG). They have
+# no synonyms, so they carry no information about codon choice; Sharp and Li
+# (1987) exclude them from CAI. See `load_cai_weights`.
+SINGLE_CODON_FAMILIES = sorted(aa for aa, cs in AA_TO_CODONS.items() if len(cs) == 1)
+SINGLE_CODONS = {c for aa in SINGLE_CODON_FAMILIES for c in AA_TO_CODONS[aa]}
+
 # amino-acid polarity classification (standard biochemistry)
 POLARITY = {
     "Ala": "non-polar", "Val": "non-polar", "Leu": "non-polar", "Ile": "non-polar",
@@ -78,12 +84,34 @@ def strip_stop(seq):
     return seq
 
 
-def load_cai_weights(cut_file=None):
+def load_cai_weights(cut_file=None, include_met_trp=False):
     """
     Load the Ehum.cut reference table (paper's cited Peden 1999 human
     high-expression codon usage set, bundled with EMBOSS) and compute
     proper CAI weights: w_ij = usage_ij / max(usage_i*) within each amino
     acid family (the normalization the original cai_fasta.py got wrong).
+
+    `include_met_trp` selects whether the single-codon families Met and Trp
+    enter the geometric mean:
+
+      False (default) : they are omitted from the returned dictionary, so
+                        `compute_cai` skips those codons entirely. This is the
+                        standard definition of Sharp and Li (1987) and the
+                        behaviour used for every CAI value in the revised
+                        manuscript.
+      True            : they are returned with w = 1, which is what the
+                        submitted version of the manuscript did. A weight of
+                        exactly one can only raise a geometric mean of terms
+                        that are all <= 1, so those values were slightly
+                        inflated. This mode is kept so the submitted numbers
+                        can still be reproduced exactly from this repository,
+                        which is how the correction was validated before any
+                        value was changed.
+
+    The correction is not a uniform offset: it depends on how much Met and Trp
+    a sequence contains. The human reference panels fall by 0.0070-0.0081 CAI
+    units, the Andes virus coding sequences by 0.0102-0.0113, and the 22
+    nucleoprotein sequences by 0.0086-0.0175.
     """
     cut_file = cut_file or (BASE / "Ehum.cut")
     raw_freq = {}  # codon -> Frequency-per-1000 (column 3, "Number" is col 4 - we use Frequency to avoid rounding of Fraction)
@@ -100,6 +128,8 @@ def load_cai_weights(cut_file=None):
 
     weights = {}
     for aa, codons in AA_TO_CODONS.items():
+        if len(codons) == 1 and not include_met_trp:
+            continue  # Met / Trp: no synonyms, excluded per Sharp and Li (1987)
         family_freqs = {c: raw_freq.get(c, 0.0) for c in codons}
         max_freq = max(family_freqs.values())
         for c, f in family_freqs.items():
@@ -115,7 +145,9 @@ def compute_cai(seq, weights):
     log_sum, n = 0.0, 0
     for c in codons:
         if c not in weights:
-            continue  # skip ambiguous/ N-containing codons
+            # ambiguous / N-containing codons, and -- unless the weight table
+            # was built with include_met_trp=True -- ATG and TGG
+            continue
         w = weights[c]
         if w <= 0:
             w = 1e-6  # avoid log(0); shouldn't normally happen (own-codon w=1 always included)
@@ -126,11 +158,36 @@ def compute_cai(seq, weights):
     return exp(log_sum / n)
 
 
-def compute_enc(seq):
+def compute_enc(seq, undefined="as_published"):
     """
     Wright (1990) effective number of codons, "The 'effective number of
     codons' used in a gene", Gene 87:23-29 - same formula EMBOSS chips
     implements. Returns Nc in [20, 61].
+
+    `undefined` selects what to do with a degeneracy class whose mean F cannot
+    be estimated (no family in the class has n > 1) or estimates to exactly
+    zero. F = 0 means a family whose codons were used perfectly evenly - with
+    k codons used once each, sum(p^2) = 1/k = 1/n, so F = (n*sum(p^2) - 1)/(n - 1)
+    is 0 - and 1/F is then a division by zero. It is a real, computed estimate,
+    not a missing one, and it does arise here: the Ile family of the lung panel
+    gene NDUFA3 has exactly one of each of ATT, ATC, ATA.
+
+      'as_published' (default) : substitute F = 1 for such a class. This is what
+            the submitted pipeline did, and it reproduces every ENC value
+            printed in the manuscript, NDUFA3 (38.842) included. It is the
+            default so that this repository reproduces the published tables.
+            Be clear about what it means, though: F = 1 is MAXIMAL bias,
+            imposed on a family whose codons are maximally even, so it pushes
+            Nc down - the opposite direction from the truth. For NDUFA3 the
+            affected class is the 3-fold one, contributing 1/F, so the error is
+            bounded and small; it would be larger for the 2-fold (9/F) or
+            4-fold (5/F) classes.
+      'wright'                 : F3 = (F2 + F4)/2 when the 3-fold class is the
+            unusable one - Wright's own suggestion for an absent or singleton
+            Ile family. For NDUFA3 this gives 39.545 rather than 38.842.
+
+    ENC is unaffected by the Met/Trp exclusion applied to CAI in the revision:
+    single-codon families enter none of the degeneracy classes of this formula.
     """
     seq = strip_stop(seq)
     codons = [seq[i : i + 3] for i in range(0, len(seq), 3) if len(seq[i : i + 3]) == 3]
@@ -163,15 +220,25 @@ def compute_enc(seq):
         vals = [v for v in vals if v is not None]
         F_bar[fold] = sum(vals) / len(vals) if vals else None
 
-    # Wright's formula: Nc = 2 + 9/F2 + 1/F3 + 5/F4 + 3/F6
-    # fallback per Wright 1990: if a class has no usable data, use average
-    # of neighboring classes (common convention); here we fall back to a
-    # neutral F=1.0 (no bias) if entirely missing, which is the simplest
-    # documented convention and only matters for extremely short genes.
-    def get_F(fold):
-        return F_bar.get(fold) if F_bar.get(fold) else 1.0
+    # Wright's formula: Nc = 2 + 9/F2 + 1/F3 + 5/F4 + 3/F6.
+    # Note the test below is `is None or == 0.0`, not a falsy test: a computed
+    # F of exactly 0.0 is an estimate, and treating it as missing data was a
+    # bug in the submitted version of this function. The two conventions are
+    # documented in the docstring; 'as_published' keeps the published numbers.
+    unusable = [k for k in (2, 3, 4, 6) if F_bar.get(k) is None or F_bar[k] == 0.0]
+    if undefined == "as_published":
+        for k in unusable:
+            F_bar[k] = 1.0
+    elif undefined == "wright":
+        if 3 in unusable and F_bar.get(2) and F_bar.get(4):
+            F_bar[3] = (F_bar[2] + F_bar[4]) / 2.0
+            unusable.remove(3)
+        for k in unusable:
+            F_bar[k] = 1.0
+    else:
+        raise ValueError(f"unknown `undefined` convention: {undefined!r}")
 
-    Nc = 2 + 9 / get_F(2) + 1 / get_F(3) + 5 / get_F(4) + 3 / get_F(6)
+    Nc = 2 + 9 / F_bar[2] + 1 / F_bar[3] + 5 / F_bar[4] + 3 / F_bar[6]
     return min(Nc, 61.0)
 
 
